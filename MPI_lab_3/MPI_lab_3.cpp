@@ -11,6 +11,7 @@
 using namespace std;
 using namespace std::chrono;
 
+
 // Условия выполнения программы: все матрицы квадратные,
 // размер блоков и их количество по горизонтали и вертикали
 // одинаково, процессы образуют квадратную решетку
@@ -110,6 +111,7 @@ void ProcessInitialization(double*& pAMatrix, double*& pBMatrix,
         pBMatrix = new double[Size * Size];
         pCMatrix = new double[Size * Size];
         RandomDataInitialization(pAMatrix, pBMatrix, Size);
+
         cout << "Matrix A" << endl;
         PrintMatrix(pAMatrix, Size);
         cout << "Matrix B" << endl;
@@ -183,8 +185,9 @@ void ParallelResultCalculation(double* pAblock, double* pMatrixAblock,
 // Распределение исходных данных между процессами
 void DataDistribution(double* pAMatrix, double* pBMatrix, double* pMatrixAblock, double* pBblock, int Size, int BlockSize) {
     //Создание вектора данных кастомного типа 
-    MPI_Datatype MatrixBlock;
-    MPI_Type_create_hvector(BlockSize, BlockSize, Size * sizeof(double), MPI_DOUBLE, &MatrixBlock);
+    MPI_Datatype DummyType, MatrixBlock;
+    MPI_Type_vector(BlockSize, BlockSize, Size, MPI_DOUBLE, &DummyType);
+    MPI_Type_create_resized(DummyType, 0, BlockSize * sizeof(double), &MatrixBlock);
     //Применение нового типа данных
     MPI_Type_commit(&MatrixBlock);
 
@@ -218,8 +221,9 @@ void DataDistribution(double* pAMatrix, double* pBMatrix, double* pMatrixAblock,
 // Сбор результирующей матрицы из блоков
 void ResultCollection(double* pCMatrix, double* pCblock, int Size, int BlockSize) {
     //Создание вектора данных кастомного типа 
-    MPI_Datatype MatrixBlock;
-    MPI_Type_create_hvector(BlockSize, BlockSize, Size * sizeof(double), MPI_DOUBLE, &MatrixBlock);
+    MPI_Datatype DummyType,MatrixBlock;
+    MPI_Type_vector(BlockSize, BlockSize, Size, MPI_DOUBLE, &DummyType);
+    MPI_Type_create_resized(DummyType, 0, BlockSize * sizeof(double), &MatrixBlock);
     //Применение нового типа данных
     MPI_Type_commit(&MatrixBlock);
 
@@ -264,6 +268,18 @@ void ProcessTermination(double* pAMatrix, double* pBMatrix, double* pCMatrix, do
 }
 
 
+void NaiveMatrixMultiply(double* A, double* B, double* C, int Size) {
+
+    // Перемножение матриц
+    for (int i = 0; i < Size; ++i) {
+        for (int j = 0; j < Size; ++j) {
+            for (int k = 0; k < Size; ++k) {
+                C[i * Size + j] += A[i * Size + k] * B[k * Size + j];
+            }
+        }
+    }
+}
+
 void main(int argc, char* argv[])
 {
     setlocale(LC_ALL, "Russian");
@@ -278,13 +294,37 @@ void main(int argc, char* argv[])
     double* pBblock;  // Блок матрицы В на процессе
     double* pCblock;  // Блок результирующей матрицы С на процессе
     double* pMatrixAblock;
-    double Start, Finish, Duration;
     setvbuf(stdout, 0, _IONBF, 0);
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
     MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
 
     GridSize = sqrt((double)ProcNum);
+
+
+    if (ProcNum == 1) {
+
+        cout << "Single-process run" << endl;
+
+       
+        int Size = 1024;
+
+        double* pAMatrix = new double [Size*Size];
+        double* pBMatrix = new double[Size * Size];
+        double* pCMatrix = new double[Size * Size];  
+
+        RandomDataInitialization(pAMatrix, pBMatrix, Size);
+
+        for (int i = 0; i < Size * Size; i++) {
+            pCMatrix[i] = 0;
+        }
+       
+        NaiveMatrixMultiply(pAMatrix, pBMatrix, pCMatrix, Size);
+       
+        return;
+    
+    }
+
     if (ProcNum != GridSize * GridSize)
     {
         if (ProcRank == 0)
@@ -294,30 +334,34 @@ void main(int argc, char* argv[])
     }
     else
     {
-        if (ProcRank == 0)
+        
+        if (ProcRank == 0) {
             cout << "Parallel matrix multiplication program" << endl;
+        }
+
 
         // Создание виртуальной решетки процессов и коммуникаторов строк и столбцов
         CreateGridCommunicators();
         // Выделение памяти и инициализация элементов матриц
         ProcessInitialization(pAMatrix, pBMatrix, pCMatrix, pAblock, pBblock, pCblock, pMatrixAblock, Size, BlockSize);
         // Блочное распределение матриц между процессами
-        DataDistribution(pAMatrix, pBMatrix, pMatrixAblock, pBblock, Size,
-            BlockSize);
+        DataDistribution(pAMatrix, pBMatrix, pMatrixAblock, pBblock, Size, BlockSize);
+
         // Выполнение параллельного метода Фокса
-        ParallelResultCalculation(pAblock, pMatrixAblock, pBblock,
-            pCblock, BlockSize);
+        ParallelResultCalculation(pAblock, pMatrixAblock, pBblock, pCblock, BlockSize);
         // Сбор результирующей матрицы на ведущем процессе
         ResultCollection(pCMatrix, pCblock, Size, BlockSize);
+
 
         if (ProcRank == 0) {
             cout << "Result matrix" << endl;
             PrintMatrix(pCMatrix, Size);
+
         }
 
         // Завершение процесса вычислений
         ProcessTermination(pAMatrix, pBMatrix, pCMatrix, pAblock, pBblock, pCblock, pMatrixAblock);
     }
     MPI_Finalize();
-    
+    return;
 }
