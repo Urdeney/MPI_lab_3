@@ -109,11 +109,7 @@ void ProcessInitialization(double*& pAMatrix, double*& pBMatrix,
         pAMatrix = new double[Size * Size];
         pBMatrix = new double[Size * Size];
         pCMatrix = new double[Size * Size];
-        //RandomDataInitialization(pAMatrix, pBMatrix, Size);
-        for (int i = 0; i < Size * Size; i++) {
-            pAMatrix[i] = i; // Случайные числа от 0 до 9
-            pBMatrix[i] = i;
-        }
+        RandomDataInitialization(pAMatrix, pBMatrix, Size);
         cout << "Matrix A" << endl;
         PrintMatrix(pAMatrix, Size);
         cout << "Matrix B" << endl;
@@ -184,67 +180,71 @@ void ParallelResultCalculation(double* pAblock, double* pMatrixAblock,
     }
 }
 
-// Распределние исходных данных
+// Распределение исходных данных между процессами
 void DataDistribution(double* pAMatrix, double* pBMatrix, double* pMatrixAblock, double* pBblock, int Size, int BlockSize) {
-    MPI_Datatype BlockType, ResizedBlockType;
-    /*
-    MPI_Type_vector(BlockSize, BlockSize, Size, MPI_DOUBLE, &BlockType);
-    MPI_Type_create_resized(BlockType, 0, BlockSize * sizeof(double), &ResizedBlockType);
-    MPI_Type_commit(&ResizedBlockType);
-    */
+    //Создание вектора данных кастомного типа 
+    MPI_Datatype MatrixBlock;
+    MPI_Type_create_hvector(BlockSize, BlockSize, Size * sizeof(double), MPI_DOUBLE, &MatrixBlock);
+    //Применение нового типа данных
+    MPI_Type_commit(&MatrixBlock);
 
-    int* SendCounts = new int[ProcNum];
-    int* Displs = new int[ProcNum];
+    //кол-во элементов
+    int* sendcounts = new int[ProcNum];
+    //смещения
+    int* displs = new int[ProcNum];
 
     if (ProcRank == 0) {
         int Disp = 0;
         for (int i = 0; i < GridSize; i++) {
             for (int j = 0; j < GridSize; j++) {
-                SendCounts[i * GridSize + j] = 1;
-                Displs[i * GridSize + j] = Disp;
+                sendcounts[i * GridSize + j] = 1;
+                displs[i * GridSize + j] = Disp;
                 Disp += 1;
             }
             Disp += (BlockSize - 1) * GridSize;
         }
     }
 
-    MPI_Scatterv(pAMatrix, SendCounts, Displs, ResizedBlockType, pMatrixAblock, BlockSize * BlockSize, MPI_DOUBLE, 0, GridComm);
-    MPI_Scatterv(pBMatrix, SendCounts, Displs, ResizedBlockType, pBblock, BlockSize * BlockSize, MPI_DOUBLE, 0, GridComm);
+    //Распределение матрицы A
+    MPI_Scatterv(pAMatrix, sendcounts, displs, MatrixBlock, pMatrixAblock, BlockSize * BlockSize, MPI_DOUBLE, 0, GridComm);
 
-    delete[] SendCounts;
-    delete[] Displs;
-    //MPI_Type_free(&ResizedBlockType);
+    //Распределение матрицы B
+    MPI_Scatterv(pBMatrix, sendcounts, displs, MatrixBlock, pBblock, BlockSize * BlockSize, MPI_DOUBLE, 0, GridComm);
+
+    delete[] sendcounts;
+    delete[] displs;
 }
 
-//Сбор результирующей матрицы
+// Сбор результирующей матрицы из блоков
 void ResultCollection(double* pCMatrix, double* pCblock, int Size, int BlockSize) {
-    MPI_Datatype BlockType, ResizedBlockType;
-    /*
-    MPI_Type_vector(BlockSize, BlockSize, Size, MPI_DOUBLE, &BlockType);
-    MPI_Type_create_resized(BlockType, 0, BlockSize * sizeof(double), &ResizedBlockType);
-    MPI_Type_commit(&ResizedBlockType);
-    */
+    //Создание вектора данных кастомного типа 
+    MPI_Datatype MatrixBlock;
+    MPI_Type_create_hvector(BlockSize, BlockSize, Size * sizeof(double), MPI_DOUBLE, &MatrixBlock);
+    //Применение нового типа данных
+    MPI_Type_commit(&MatrixBlock);
 
-    int* SendCounts = new int[ProcNum];
-    int* Displs = new int[ProcNum];
+    //кол-во элементов
+    int* sendcounts = new int[ProcNum];
+    //смещения
+    int* displs = new int[ProcNum];
 
     if (ProcRank == 0) {
         int Disp = 0;
         for (int i = 0; i < GridSize; i++) {
             for (int j = 0; j < GridSize; j++) {
-                SendCounts[i * GridSize + j] = 1;
-                Displs[i * GridSize + j] = Disp;
+                sendcounts[i * GridSize + j] = 1;
+                displs[i * GridSize + j] = Disp;
                 Disp += 1;
             }
             Disp += (BlockSize - 1) * GridSize;
         }
     }
 
-    MPI_Gatherv(pCblock, BlockSize * BlockSize, MPI_DOUBLE, pCMatrix, SendCounts, Displs, ResizedBlockType, 0, GridComm);
+    //Сбор матрицы результирующей матрицы
+    MPI_Gatherv(pCblock, BlockSize * BlockSize, MPI_DOUBLE, pCMatrix, sendcounts, displs, MatrixBlock, 0, GridComm);
 
-    delete[] SendCounts;
-    delete[] Displs;
-    //MPI_Type_free(&ResizedBlockType);
+    delete[] sendcounts;
+    delete[] displs;
 }
 
 
