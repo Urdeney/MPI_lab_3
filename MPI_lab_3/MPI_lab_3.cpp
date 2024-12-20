@@ -112,10 +112,10 @@ void ProcessInitialization(double*& pAMatrix, double*& pBMatrix,
         pCMatrix = new double[Size * Size];
         RandomDataInitialization(pAMatrix, pBMatrix, Size);
 
-        cout << "Matrix A" << endl;
-        PrintMatrix(pAMatrix, Size);
-        cout << "Matrix B" << endl;
-        PrintMatrix(pBMatrix, Size);
+        //cout << "Matrix A" << endl;
+        //PrintMatrix(pAMatrix, Size);
+        //cout << "Matrix B" << endl;
+        //PrintMatrix(pBMatrix, Size);
     }
 }
 
@@ -304,10 +304,10 @@ void main(int argc, char* argv[])
 
     if (ProcNum == 1) {
 
-        cout << "Single-process run" << endl;
-
-       
         int Size = 1024;
+
+        cout << "Single-process run" << endl;
+        cout << "Matix size: " << Size << endl;
 
         double* pAMatrix = new double [Size*Size];
         double* pBMatrix = new double[Size * Size];
@@ -318,9 +318,15 @@ void main(int argc, char* argv[])
         for (int i = 0; i < Size * Size; i++) {
             pCMatrix[i] = 0;
         }
+
+        steady_clock::time_point start = high_resolution_clock::now();
        
         NaiveMatrixMultiply(pAMatrix, pBMatrix, pCMatrix, Size);
+
+        steady_clock::time_point end = high_resolution_clock::now();
        
+        cout << "Total time: " << duration_cast<milliseconds>(end - start).count() << " miliseconds" << endl;
+
         return;
     
     }
@@ -347,16 +353,21 @@ void main(int argc, char* argv[])
         // Блочное распределение матриц между процессами
         DataDistribution(pAMatrix, pBMatrix, pMatrixAblock, pBblock, Size, BlockSize);
 
+
+        steady_clock::time_point start = high_resolution_clock::now();
         // Выполнение параллельного метода Фокса
         ParallelResultCalculation(pAblock, pMatrixAblock, pBblock, pCblock, BlockSize);
         // Сбор результирующей матрицы на ведущем процессе
         ResultCollection(pCMatrix, pCblock, Size, BlockSize);
-
+       
 
         if (ProcRank == 0) {
-            cout << "Result matrix" << endl;
-            PrintMatrix(pCMatrix, Size);
+            steady_clock::time_point end = high_resolution_clock::now();
+            cout << "Total time: " << duration_cast<milliseconds>(end - start).count() << " miliseconds" << endl;
+            //cout << "Result matrix" << endl;
+            //PrintMatrix(pCMatrix, Size);
 
+            
         }
 
         // Завершение процесса вычислений
