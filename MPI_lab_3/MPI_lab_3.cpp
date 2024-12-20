@@ -66,6 +66,15 @@ void CreateGridCommunicators()
     MPI_Cart_sub(GridComm, Subdims, &ColComm);
 }
 
+// Генерация рандомной матрицы
+void RandomDataInitialization(double* pAMatrix, double* pBMatrix, int Size) {
+    srand(static_cast<unsigned>(time(0)));
+    for (int i = 0; i < Size * Size; i++) {
+        pAMatrix[i] = rand() % 10;
+        pBMatrix[i] = rand() % 10;
+    }
+}
+
 // Функция для выделения памяти и инициализации исходных данных
 void ProcessInitialization(double*& pAMatrix, double*& pBMatrix,
     double*& pCMatrix, double*& pAblock, double*& pBblock,
@@ -101,7 +110,6 @@ void ProcessInitialization(double*& pAMatrix, double*& pBMatrix,
         pBMatrix = new double[Size * Size];
         pCMatrix = new double[Size * Size];
         //RandomDataInitialization(pAMatrix, pBMatrix, Size);
-        srand(static_cast<unsigned>(time(0)));
         for (int i = 0; i < Size * Size; i++) {
             pAMatrix[i] = i; // Случайные числа от 0 до 9
             pBMatrix[i] = i;
@@ -176,15 +184,14 @@ void ParallelResultCalculation(double* pAblock, double* pMatrixAblock,
     }
 }
 
-///////////////////////////////Генерация ChatGPT///////////////////////////////
-
-
-// Распределение исходных данных между процессами
+// Распределние исходных данных
 void DataDistribution(double* pAMatrix, double* pBMatrix, double* pMatrixAblock, double* pBblock, int Size, int BlockSize) {
     MPI_Datatype BlockType, ResizedBlockType;
+    /*
     MPI_Type_vector(BlockSize, BlockSize, Size, MPI_DOUBLE, &BlockType);
     MPI_Type_create_resized(BlockType, 0, BlockSize * sizeof(double), &ResizedBlockType);
     MPI_Type_commit(&ResizedBlockType);
+    */
 
     int* SendCounts = new int[ProcNum];
     int* Displs = new int[ProcNum];
@@ -206,15 +213,17 @@ void DataDistribution(double* pAMatrix, double* pBMatrix, double* pMatrixAblock,
 
     delete[] SendCounts;
     delete[] Displs;
-    MPI_Type_free(&ResizedBlockType);
+    //MPI_Type_free(&ResizedBlockType);
 }
 
-// Сбор результирующей матрицы из блоков
+//Сбор результирующей матрицы
 void ResultCollection(double* pCMatrix, double* pCblock, int Size, int BlockSize) {
     MPI_Datatype BlockType, ResizedBlockType;
+    /*
     MPI_Type_vector(BlockSize, BlockSize, Size, MPI_DOUBLE, &BlockType);
     MPI_Type_create_resized(BlockType, 0, BlockSize * sizeof(double), &ResizedBlockType);
     MPI_Type_commit(&ResizedBlockType);
+    */
 
     int* SendCounts = new int[ProcNum];
     int* Displs = new int[ProcNum];
@@ -235,19 +244,11 @@ void ResultCollection(double* pCMatrix, double* pCblock, int Size, int BlockSize
 
     delete[] SendCounts;
     delete[] Displs;
-    MPI_Type_free(&ResizedBlockType);
+    //MPI_Type_free(&ResizedBlockType);
 }
 
-// Инициализация исходных матриц случайными числами
-void RandomDataInitialization(double* pAMatrix, double* pBMatrix, int Size) {
-    srand(static_cast<unsigned>(time(0)));
-    for (int i = 0; i < Size * Size; i++) {
-        pAMatrix[i] = rand() % 100; // Случайные числа от 0 до 99
-        pBMatrix[i] = rand() % 100;
-    }
-}
 
-// Завершение процессов и освобождение памяти
+//Очистка памяти
 void ProcessTermination(double* pAMatrix, double* pBMatrix, double* pCMatrix, double* pAblock, double* pBblock, double* pCblock, double* pMatrixAblock) {
     if (ProcRank == 0) {
         delete[] pAMatrix;
@@ -258,11 +259,9 @@ void ProcessTermination(double* pAMatrix, double* pBMatrix, double* pCMatrix, do
     delete[] pBblock;
     delete[] pCblock;
     delete[] pMatrixAblock;
+
+    _CrtDumpMemoryLeaks();
 }
-
-
-
-
 
 
 void main(int argc, char* argv[])
@@ -290,13 +289,13 @@ void main(int argc, char* argv[])
     {
         if (ProcRank == 0)
         {
-            printf("Number of processes must be a perfect square \n");
+            cout << "Number of processes must be a perfect square" << endl;
         }
     }
     else
     {
         if (ProcRank == 0)
-            printf("Parallel matrix multiplication program\n");
+            cout << "Parallel matrix multiplication program" << endl;
 
         // Создание виртуальной решетки процессов и коммуникаторов строк и столбцов
         CreateGridCommunicators();
@@ -312,7 +311,7 @@ void main(int argc, char* argv[])
         ResultCollection(pCMatrix, pCblock, Size, BlockSize);
 
         if (ProcRank == 0) {
-            cout << "result matrix" << endl;
+            cout << "Result matrix" << endl;
             PrintMatrix(pCMatrix, Size);
         }
 
